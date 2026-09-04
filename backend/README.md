@@ -155,6 +155,32 @@ Copy-Item .env.example .env    # один раз — задаёт логин а�
 Проверить сгенерированный файл в `alembic/versions/` перед применением —
 автогенерация не всегда угадывает переименования колонок.
 
+## Тесты
+
+`tests/test_auth_ownership.py` — сценарии из аудита в
+`docs/TZ-03-zakryt-dyru-i-miniapp.md` (ТЗ-Д): 401 без `X-Telegram-Init-Data`
+и при чужой подписи, 403 на чужой `telegram_id` в пути (`addresses`/
+`customers`), 404 на чужой заказ во всех трёх эндпоинтах `routers/orders.py`
+(включая `/pay`), гостевые заказы скрыты от API, реферальный бонус
+начисляется обеим сторонам после оплаты.
+
+Нужен настоящий Postgres (не SQLite — см. `app/database.py`), отдельная
+тестовая БД с накатанными миграциями:
+
+```bash
+createdb chtivo_test
+pip install pytest httpx
+DATABASE_URL=postgresql+psycopg2://<user>@localhost/chtivo_test alembic upgrade head
+DATABASE_URL=postgresql+psycopg2://<user>@localhost/chtivo_test \
+    BOT_TOKEN=test-token-for-pytest pytest
+```
+
+`BOT_TOKEN` для тестов — любой; тесты подписывают `initData` сами (см.
+`tests/test_auth_ownership.py:sign_init_data`), реальный токен бота не
+нужен. `tests/conftest.py` перед прогоном сбрасывает и пересеивает данные
+клиентов/товаров — тестовую БД можно переиспользовать между запусками, она
+не для продовых данных.
+
 ## Дальше по плану
 
 - Подключить реальный расчёт стоимости для `calculated`-методов (СДЭК/Boxberry API).
