@@ -1,0 +1,623 @@
+/* ---------- Layout ---------- */
+.app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  padding: 16px 16px 96px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.back-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.page-header h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.eyebrow {
+  font-family: "PT Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  margin: 0 0 6px;
+}
+
+/* ---------- Bottom nav ---------- */
+.bottom-nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  gap: 2px;
+}
+
+.bottom-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  color: var(--ink-faint);
+  text-decoration: none;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.bottom-nav a.active {
+  color: var(--accent);
+}
+
+.bottom-nav .icon {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.cart-badge {
+  position: absolute;
+  top: 0;
+  right: calc(50% - 20px);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--tg-button, var(--accent));
+  color: var(--tg-button-text, var(--accent-ink));
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  width: auto;
+}
+
+/* ---------- Cards / catalog ---------- */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.product-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+
+.product-cover {
+  aspect-ratio: 3 / 4;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+  font-family: "PT Serif", serif;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 10px;
+}
+
+.product-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-info {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.product-type {
+  font-family: "PT Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.product-title {
+  font-family: "PT Serif", serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  flex: 1;
+}
+
+.product-price {
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.product-stock {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.product-stock.low {
+  color: var(--accent);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--ink-muted);
+  padding: 48px 16px;
+}
+
+/* ---------- Product detail ---------- */
+.pd-cover {
+  aspect-ratio: 4 / 3;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+}
+
+.pd-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pd-price {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 6px 0 12px;
+}
+
+.pd-description {
+  color: var(--ink-muted);
+  margin-bottom: 20px;
+  white-space: pre-wrap;
+}
+
+.qty-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.qty-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.qty-value {
+  font-family: "PT Mono", monospace;
+  font-size: 1.1rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+.sticky-bottom {
+  position: sticky;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  padding-top: 10px;
+}
+
+/* ---------- Cart ---------- */
+.cart-line {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+
+.cart-line:last-child {
+  border-bottom: none;
+}
+
+.cart-line-cover {
+  width: 52px;
+  height: 68px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.cart-line-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cart-line-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cart-line-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 3px;
+}
+
+.cart-line-price {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.cart-line-qty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cart-line-qty .qty-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 0.9rem;
+}
+
+.cart-remove {
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 4px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.92rem;
+  color: var(--ink-muted);
+}
+
+.summary-row.total {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 1.05rem;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+/* ---------- Forms ---------- */
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.radio-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.radio-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.radio-card input {
+  margin-top: 2px;
+}
+
+.radio-card-body {
+  flex: 1;
+}
+
+.radio-card-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.radio-card-desc {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.radio-card-cost {
+  font-family: "PT Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* ---------- Callouts / banners ---------- */
+.callout {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+}
+
+.callout.amber {
+  border-left-color: var(--accent-2);
+}
+
+.spinner-row {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+  color: var(--ink-faint);
+}
+
+/* ---------- Order status ---------- */
+.status-badge {
+  display: inline-block;
+  font-family: "PT Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+
+.status-badge.paid,
+.status-badge.delivered {
+  background: var(--done);
+  color: var(--accent-ink);
+}
+
+.status-badge.cancelled {
+  background: var(--danger);
+  color: var(--accent-ink);
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 12px;
+  padding-bottom: 18px;
+  position: relative;
+}
+
+.timeline li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: 4px;
+}
+
+.timeline li::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 16px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.timeline li:last-child::after {
+  display: none;
+}
+
+.timeline-status {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.timeline-meta {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ---------- Order card (list) ---------- */
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  display: block;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.order-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.order-card-num {
+  font-family: "PT Mono", monospace;
+  font-weight: 700;
+}
+
+.order-card-total {
+  font-weight: 700;
+}
+
+.order-card-meta {
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+/* ---------- Profile ---------- */
+.profile-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.bonus-amount {
+  font-family: "PT Serif", serif;
+  font-weight: 700;
+  font-size: 2.2rem;
+  color: var(--accent);
+  margin: 6px 0;
+}
+
+.referral-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: "PT Mono", monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.copy-btn {
+  flex: 0 0 auto;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.dev-banner {
+  background: var(--accent-2);
+  color: var(--accent-2-ink);
+  font-size: 0.78rem;
+  padding: 8px 14px;
+  text-align: center;
+}

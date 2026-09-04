@@ -1,0 +1,86 @@
+/* Фирменная палитра «Чтиво» — те же токены, что в продуктовом брифе
+   (Artifact "Чтиво Маркет"), чтобы бренд не разъезжался между документами
+   и Mini App. Там, где Telegram передал свою тему (themeParams, см.
+   src/telegram.ts), она подставляется через var(--tg-*, ...) поверх
+   бренда — так Mini App уважает светлую/тёмную тему клиента пользователя,
+   не теряя фирменный акцент и типографику. */
+
+:root {
+  --bg: var(--tg-bg, #f6f2e8);
+  --surface: #ffffff;
+  --surface-2: var(--tg-bg-2, #efe8d6);
+  --ink: var(--tg-text, #201a13);
+  --ink-muted: var(--tg-hint, #6b6153);
+  --ink-faint: #948a78;
+  --line: #ded4bc;
+  --accent: #b32423;
+  --accent-ink: #fbf3e9;
+  --accent-2: #a8791e;
+  --accent-2-ink: #fbf3e9;
+  --done: #2f7a45;
+  --danger: #b32423;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 0 rgba(32, 26, 19, 0.06);
+  --tg-button: #b32423;
+  --tg-button-text: #fbf3e9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-force-light]) {
+    --bg: var(--tg-bg, #16130d);
+    --surface: #1e1a12;
+    --surface-2: var(--tg-bg-2, #262015);
+    --ink: var(--tg-text, #f0e9da);
+    --ink-muted: var(--tg-hint, #b3a88f);
+    --ink-faint: #857a65;
+    --line: #3a3122;
+    --accent: #e2534e;
+    --accent-ink: #1b1108;
+    --accent-2: #d9a63f;
+    --accent-2-ink: #1b1108;
+    --done: #6fbf83;
+    --danger: #e2534e;
+    --shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "PT Sans", "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "PT Serif", Georgia, serif;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+}
+
+.mono {
+  font-family: "PT Mono", ui-monospace, monospace;
+}
