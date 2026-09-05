@@ -1,0 +1,12 @@
+{
+  // Явная конфигурация для Cloudflare Workers (статика): без этого файла
+  // "wrangler deploy" пытается сам угадать настройку по фреймворку и версии
+  // Vite — и падает, потому что автоконфигурация поддерживает только Vite 6+,
+  // а здесь Vite 5 (см. miniapp/package.json). Явный "assets.directory"
+  // отключает это угадывание — деплоится то, что реально собрал "npm run build".
+  "name": "tgshop",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
