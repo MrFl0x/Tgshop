@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 .env
 chtivo_shop.db
+/media/
 uvicorn.out.log
 uvicorn.err.log

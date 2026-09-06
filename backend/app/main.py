@@ -6,9 +6,11 @@ load_dotenv()  # подхватить .env до того, как auth.py и data
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .admin import register_admin
 from .database import engine
+from .media import MEDIA_ROOT, MEDIA_URL_PREFIX
 from .routers import addresses, customers, delivery, orders, products
 from .seed import ensure_default_admin, run_seed_if_empty
 
@@ -40,6 +42,10 @@ app.add_middleware(
 # Перед первым запуском на новой базе: alembic upgrade head.
 run_seed_if_empty()
 ensure_default_admin()
+
+# Отдаёт файлы обложек, загруженные редактором через /admin (см. app/media.py,
+# Product.image_upload) — по тому же пути, что сохранён в Product.cover_url.
+app.mount(MEDIA_URL_PREFIX, StaticFiles(directory=str(MEDIA_ROOT)), name="media")
 
 app.include_router(products.router)
 app.include_router(delivery.router)

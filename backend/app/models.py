@@ -15,10 +15,12 @@ from sqlalchemy import (
     String,
     Text,
 )
+from fastapi_storages.integrations.sqlalchemy import ImageType
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from .database import Base
+from .media import product_images_storage
 
 
 class ProductType(str, enum.Enum):
@@ -127,6 +129,12 @@ class Product(Base):
     type = Column(SAEnum(ProductType), nullable=False, default=ProductType.ISSUE)
     description = Column(Text, nullable=False, default="")
     cover_url = Column(String(500), nullable=False, default="")
+    # Файл обложки, загружаемый редактором прямо из формы в /admin (см.
+    # ProductAdmin в app/admin.py) — после сохранения его публичный URL
+    # копируется в cover_url, который и читает Mini App (routers/products.py,
+    # ProductCard.tsx). cover_url остаётся текстовым полем — можно по-прежнему
+    # просто вставить внешнюю ссылку на картинку, не загружая файл.
+    image_upload = Column(ImageType(storage=product_images_storage, upload_to="products"), nullable=True)
     price = Column(Numeric(10, 2), nullable=False, default=0)
     stock = Column(Integer, nullable=True)  # null = без ограничения (например, подписка)
     is_active = Column(Boolean, default=True, nullable=False)

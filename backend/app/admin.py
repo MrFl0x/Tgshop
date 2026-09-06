@@ -11,6 +11,7 @@ from sqladmin.secret import Secret
 
 from .auth import AdminAuth
 from .database import SessionLocal
+from .media import image_public_url
 from .models import (
     Address,
     AdminUser,
@@ -38,15 +39,25 @@ class ProductAdmin(ModelView, model=Product):
     column_list = [Product.id, Product.title, Product.type, Product.price, Product.stock, Product.is_active]
     column_searchable_list = [Product.title]
     column_sortable_list = [Product.id, Product.price, Product.stock]
+    # image_upload — файловое поле (виджет-загрузчик подставляется автоматом
+    # моделеконвертером sqladmin по типу колонки ImageType, см. models.py).
+    # cover_url остаётся рядом как текстовое поле — можно вставить внешнюю
+    # ссылку на картинку вместо загрузки файла; при загрузке файла его
+    # публичный URL перезаписывает cover_url в after_model_change ниже.
     form_columns = [
         Product.title,
         Product.type,
         Product.description,
+        Product.image_upload,
         Product.cover_url,
         Product.price,
         Product.stock,
         Product.is_active,
     ]
+    form_args = {
+        "image_upload": {"description": "Загрузите файл — публичная ссылка сама подставится в поле «Cover Url» ниже."},
+        "cover_url": {"description": "Заполняется автоматически при загрузке файла выше; можно вписать и внешнюю ссылку на картинку вручную."},
+    }
 
     async def on_model_change(self, data: dict, model: Product, is_created: bool, request) -> None:
         # Остаток на затычке: приход/коррекция делаются прямо здесь, правкой
@@ -56,20 +67,36 @@ class ProductAdmin(ModelView, model=Product):
             request.state.product_old_stock = model.stock
 
     async def after_model_change(self, data: dict, model: Product, is_created: bool, request) -> None:
-        old_stock = getattr(request.state, "product_old_stock", None)
-        if old_stock is None or model.stock is None or old_stock == model.stock:
-            return
         changed_by = request.session.get("admin_username") or "admin"
+        old_stock = getattr(request.state, "product_old_stock", None)
+        stock_changed = old_stock is not None and model.stock is not None and old_stock != model.stock
+
         db = SessionLocal()
         try:
-            db.add(
-                StockMovement(
-                    product_id=model.id,
-                    delta=model.stock - old_stock,
-                    reason=StockMovementReason.RESTOCK if model.stock > old_stock else StockMovementReason.CORRECTION,
-                    changed_by=changed_by,
+            # Свежий инстанс в своей сессии: `model.image_upload` на этом шаге
+            # ещё может быть "сырым" объектом загрузки, а не сохранённым
+            # StorageImage (тип-конвертер applies только к тому, что реально
+            # прочитано из БД) — читаем cover_url/image_upload только отсюда.
+            product = db.get(Product, model.id)
+            new_cover_url = image_public_url(product.image_upload) if product.image_upload else None
+            cover_url_changed = new_cover_url is not None and new_cover_url != product.cover_url
+
+            if not stock_changed and not cover_url_changed:
+                return
+
+            if stock_changed:
+                db.add(
+                    StockMovement(
+                        product_id=model.id,
+                        delta=model.stock - old_stock,
+                        reason=StockMovementReason.RESTOCK
+                        if model.stock > old_stock
+                        else StockMovementReason.CORRECTION,
+                        changed_by=changed_by,
+                    )
                 )
-            )
+            if cover_url_changed:
+                product.cover_url = new_cover_url
             db.commit()
         finally:
             db.close()
