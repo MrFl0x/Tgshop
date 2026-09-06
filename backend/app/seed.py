@@ -75,12 +75,116 @@ DEFAULT_DELIVERY_METHODS = [
 ]
 
 SAMPLE_PRODUCTS = [
+    # Реальные тематические номера журнала «Чтиво» (chtv.ru) — цена по
+    # образцу из карточки товара на Ozon (950₽ за печатный номер).
     dict(
-        title="Чтиво №1 — «Шоу продолжается»",
+        title="Чтиво — «Мечта» (обложка 1)",
         type=ProductType.ISSUE,
-        description="Первый печатный номер журнала.",
-        price=690,
-        stock=150,
+        description="Тематический номер о мечте — что это такое сегодня и кто её ещё не разучился видеть.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Мечта» (обложка 2)",
+        type=ProductType.ISSUE,
+        description="Тематический номер о мечте — что это такое сегодня и кто её ещё не разучился видеть.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Деньги»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о деньгах: как их зарабатывают, тратят и теряют.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Чудеса»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о чудесах — рациональных и не очень.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «В отпуск!»",
+        type=ProductType.ISSUE,
+        description="Тематический номер об отпуске и умении вовремя остановиться.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Женщины»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о женщинах — героинях и авторах номера.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Самый вкусный номер»",
+        type=ProductType.ISSUE,
+        description="Гастрономический номер: еда, рестораны и те, кто их создаёт.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Эпохи и потребление»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о смене эпох и о том, как мы потребляем.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Рекорды»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о рекордах и тех, кто их ставит.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво №6 (2025) — «Ночной номер»",
+        type=ProductType.ISSUE,
+        description=(
+            "Номер про ночь: кого боялись предки с заходом солнца, как проходили "
+            "главные вечеринки в истории и чем живут мегаполисы после заката. "
+            "Большое интервью Сергея Минаева с Константином Хабенским."
+        ),
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Взгляд»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о взгляде — на себя, на других, на эпоху.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Москва и москвичи»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о Москве и тех, кто её создаёт сегодня.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «История понтов»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о статусе и о том, как его показывают.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Любовь это...»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о любви — разной и не всегда удобной.",
+        price=950,
+        stock=100,
+    ),
+    dict(
+        title="Чтиво — «Шоу продолжается»",
+        type=ProductType.ISSUE,
+        description="Тематический номер о шоу-бизнесе и тех, кто держит сцену.",
+        price=950,
+        stock=100,
     ),
     dict(
         title="Подписка на 6 месяцев (4 номера)",
