@@ -4,11 +4,15 @@
 и трек-номером — та же сущность, что описана в продуктовом плане.
 """
 import secrets
+from datetime import datetime, timedelta
 
 import wtforms
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.secret import Secret
+from starlette.requests import Request
+from starlette.responses import Response
 
+from . import analytics
 from .auth import AdminAuth
 from .database import SessionLocal
 from .media import image_public_url
@@ -366,8 +370,61 @@ class AdminUserAdmin(ModelView, model=AdminUser):
         )
 
 
+class RevenueReportView(BaseView):
+    """Отчёт по выручке (app/analytics.py) — считается на лету поверх
+    Order/OrderItem по фильтрам из query-параметров, отдельного экрана
+    "выгрузки" нет: печать/сохранение страницы браузером достаточно для
+    маленькой редакции."""
+
+    name = "Отчёт по выручке"
+    identity = "reports-revenue"
+    icon = "fa-solid fa-chart-line"
+
+    @expose("/reports/revenue", methods=["GET"])
+    async def revenue_report(self, request: Request) -> Response:
+        today = datetime.utcnow().date()
+        date_from_str = request.query_params.get("from") or today.replace(day=1).isoformat()
+        date_to_str = request.query_params.get("to") or today.isoformat()
+        group_by = request.query_params.get("group_by") or "day"
+        if group_by not in ("day", "month"):
+            group_by = "day"
+
+        try:
+            date_from = datetime.strptime(date_from_str, "%Y-%m-%d")
+            # Верхняя граница исключительная — начало следующего дня после "по",
+            # чтобы сам день "по" вошёл в период целиком.
+            date_to_exclusive = datetime.strptime(date_to_str, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            date_from_str = today.replace(day=1).isoformat()
+            date_to_str = today.isoformat()
+            date_from = datetime.strptime(date_from_str, "%Y-%m-%d")
+            date_to_exclusive = datetime.strptime(date_to_str, "%Y-%m-%d") + timedelta(days=1)
+
+        db = SessionLocal()
+        try:
+            summary = analytics.revenue_summary(db, date_from, date_to_exclusive)
+            points = analytics.revenue_by_period(db, date_from, date_to_exclusive, group_by)
+            products = analytics.revenue_by_product(db, date_from, date_to_exclusive)
+        finally:
+            db.close()
+
+        return await self.templates.TemplateResponse(
+            request,
+            "reports/revenue.html",
+            {
+                "date_from": date_from_str,
+                "date_to": date_to_str,
+                "group_by": group_by,
+                "summary": summary,
+                "points": points,
+                "products": products,
+            },
+        )
+
+
 def register_admin(app, engine) -> Admin:
     admin = Admin(app, engine, title="Чтиво · панель редакции", authentication_backend=AdminAuth())
+    admin.add_view(RevenueReportView)
     admin.add_view(ProductAdmin)
     admin.add_view(StockMovementAdmin)
     admin.add_view(DeliveryMethodAdmin)

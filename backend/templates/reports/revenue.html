@@ -1,0 +1,107 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="col-12">
+  <div class="card mb-3">
+    <div class="card-header">
+      <h3 class="card-title">Отчёт по выручке</h3>
+    </div>
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end mb-4">
+        <div class="col-auto">
+          <label class="form-label">С</label>
+          <input type="date" name="from" value="{{ date_from }}" class="form-control">
+        </div>
+        <div class="col-auto">
+          <label class="form-label">По</label>
+          <input type="date" name="to" value="{{ date_to }}" class="form-control">
+        </div>
+        <div class="col-auto">
+          <label class="form-label">Группировка</label>
+          <select name="group_by" class="form-control">
+            <option value="day" {% if group_by == "day" %}selected{% endif %}>По дням</option>
+            <option value="month" {% if group_by == "month" %}selected{% endif %}>По месяцам</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary">Показать</button>
+        </div>
+      </form>
+
+      <div class="row row-cards mb-4">
+        <div class="col-sm-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="text-secondary">Выручка за период</div>
+              <div class="h2 mb-0">{{ "%.2f"|format(summary.revenue) }} ₽</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="text-secondary">Оплаченных заказов</div>
+              <div class="h2 mb-0">{{ summary.orders_count }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="text-secondary">Средний чек</div>
+              <div class="h2 mb-0">{{ "%.2f"|format(summary.average_check) }} ₽</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h4>Динамика</h4>
+      {% if points %}
+      <table class="table table-vcenter mb-4">
+        <thead>
+          <tr>
+            <th>Период</th>
+            <th>Заказов</th>
+            <th>Выручка</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in points %}
+          <tr>
+            <td>{{ p.label }}</td>
+            <td>{{ p.orders_count }}</td>
+            <td>{{ "%.2f"|format(p.revenue) }} ₽</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-secondary mb-4">За выбранный период оплаченных заказов нет.</p>
+      {% endif %}
+
+      <h4>По товарам</h4>
+      {% if products %}
+      <table class="table table-vcenter">
+        <thead>
+          <tr>
+            <th>Товар</th>
+            <th>Продано, шт.</th>
+            <th>Выручка</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pr in products %}
+          <tr>
+            <td>{{ pr.title }}</td>
+            <td>{{ pr.quantity }}</td>
+            <td>{{ "%.2f"|format(pr.revenue) }} ₽</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-secondary">За выбранный период продаж нет.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
