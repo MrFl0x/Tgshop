@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .admin import register_admin
 from .database import engine
 from .media import MEDIA_ROOT, MEDIA_URL_PREFIX
-from .routers import addresses, customers, delivery, orders, products
+from .routers import addresses, customers, delivery, orders, products, promo_codes
 from .seed import ensure_default_admin, run_seed_if_empty
 
 app = FastAPI(
@@ -52,6 +52,7 @@ app.include_router(delivery.router)
 app.include_router(orders.router)
 app.include_router(addresses.router)
 app.include_router(customers.router)
+app.include_router(promo_codes.router)
 
 register_admin(app, engine)
 

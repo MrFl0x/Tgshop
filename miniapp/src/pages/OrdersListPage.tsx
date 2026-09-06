@@ -24,7 +24,7 @@ export function OrdersListPage() {
       {orders?.map((order) => (
         <Link key={order.id} to={`/orders/${order.id}`} className="order-card">
           <div className="order-card-top">
-            <span className="order-card-num">№{order.id}</span>
+            <span className="order-card-num">{order.number}</span>
             <span className="order-card-total">{formatPrice(order.total)}</span>
           </div>
           <div className="order-card-meta">

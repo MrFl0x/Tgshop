@@ -16,9 +16,10 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 from aiohttp import web
 
-from .config import BOT_TOKEN, NOTIFY_HOST, NOTIFY_PORT
+from .config import BOT_TOKEN, MINIAPP_URL, NOTIFY_HOST, NOTIFY_PORT
 from .handlers.start import router as start_router
 from .notify_server import build_notify_app
 
@@ -33,6 +34,16 @@ async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(start_router)
+
+    # Постоянная кнопка рядом с полем ввода (как в других Mini App) — не
+    # привязана к конкретному сообщению, видна всегда, без /start. В отличие
+    # от инлайн-кнопки в handlers/start.py не умеет нести реферальный
+    # startapp-параметр (у set_chat_menu_button без chat_id — один и тот же
+    # URL для всех), поэтому инлайн-кнопку в /start оставляем как есть — это
+    # запасной, более надёжный способ открыть магазин, а не замена.
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=MINIAPP_URL))
+    )
 
     runner = web.AppRunner(build_notify_app(bot))
     await runner.setup()

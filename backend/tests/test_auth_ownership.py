@@ -155,14 +155,18 @@ def test_create_and_pay_order_happy_path(client, next_telegram_id):
     telegram_id = next_telegram_id()
     order = _create_and_pay_order(client, telegram_id)
 
-    assert order["status"] == "paid"
+    # "paid" (оплата подтверждена) переводит заказ в awaiting_packaging —
+    # следующий шаг после оплаты в Ozon-style статусах (см. tz-zakazy.md,
+    # backend-миграция 3f0a1c7e2b6d); просто "оплачен" здесь больше не статус
+    # заказа, а только payment_status.
+    assert order["status"] == "awaiting_packaging"
     assert order["payment_status"] == "paid"
     assert order["items"][0]["product_id"] == IN_STOCK_PRODUCT_ID
 
     history = client.get(f"/orders/{order['id']}/history", headers=auth_headers(telegram_id))
     assert history.status_code == 200
     statuses = [row["to_status"] for row in history.json()]
-    assert "paid" in statuses
+    assert "awaiting_packaging" in statuses
 
 
 def test_order_endpoints_hide_foreign_order_behind_404_not_403(client, next_telegram_id):
@@ -210,12 +214,13 @@ def test_guest_order_is_hidden_from_api(client, next_telegram_id):
     try:
         delivery = db.get(DeliveryMethod, PICKUP_DELIVERY_METHOD_ID)
         guest_order = Order(
-            customer_id=None,
+            number="TEST-GUEST-ORDER",  # number — NOT NULL (см. миграцию 3f0a1c7e2b6d); тест не идёт через create_order,
+            customer_id=None,           # где номер берётся из order_number_seq, поэтому задаём вручную
             customer_name="Гость",
             customer_contact="guest@example.com",
             delivery_method_id=delivery.id,
             delivery_address="",
-            status=OrderStatus.NEW,
+            status=OrderStatus.AWAITING_PAYMENT,
             payment_status=PaymentStatus.PENDING,
             items_total=0,
             delivery_cost=0,

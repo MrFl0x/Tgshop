@@ -24,12 +24,13 @@ export function productTypeLabel(type: string): string {
 }
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
-  new: "Новый",
-  paid: "Оплачен",
-  assembled: "Собран",
-  shipped: "В пути",
+  awaiting_payment: "Ожидает оплаты",
+  awaiting_packaging: "Собираем",
+  awaiting_deliver: "Ждёт отгрузки",
+  delivering: "В пути",
   delivered: "Вручён",
   cancelled: "Отменён",
+  returned: "Возврат",
 };
 
 export function orderStatusLabel(status: string): string {

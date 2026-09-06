@@ -8,32 +8,46 @@ from datetime import datetime, timedelta
 
 import wtforms
 from sqladmin import Admin, BaseView, ModelView, expose
+from sqladmin.i18n import I18nConfig
 from sqladmin.secret import Secret
 from starlette.requests import Request
 from starlette.responses import Response
 
 from . import analytics
+from .admin_orders import OrdersPanelView
 from .auth import AdminAuth
 from .database import SessionLocal
 from .media import image_public_url
+from sqladmin.editors import JSONEditorField
+
 from .models import (
     Address,
     AdminUser,
     BonusTransaction,
     Customer,
     DeliveryMethod,
-    Order,
-    OrderItem,
-    OrderStatus,
-    OrderStatusHistory,
+    DiscountType,
     PaymentTransaction,
     Product,
+    ProductPhoto,
+    ProductType,
+    PromoCode,
     StockMovement,
     StockMovementReason,
     Subscription,
 )
-from .order_history import record_order_status_change
 from .security import hash_password
+
+
+PRODUCT_TYPE_LABELS_RU = {
+    ProductType.ISSUE: "Номер журнала",
+    ProductType.SUBSCRIPTION: "Подписка",
+    ProductType.MERCH: "Мерч",
+}
+
+
+def _format_product_type(model: Product, attribute) -> str:
+    return PRODUCT_TYPE_LABELS_RU.get(model.type, model.type.value if model.type else "—")
 
 
 class ProductAdmin(ModelView, model=Product):
@@ -43,6 +57,27 @@ class ProductAdmin(ModelView, model=Product):
     column_list = [Product.id, Product.title, Product.type, Product.price, Product.stock, Product.is_active]
     column_searchable_list = [Product.title]
     column_sortable_list = [Product.id, Product.price, Product.stock]
+    # i18n_config (см. register_admin) переводит только чужие надписи самого
+    # sqladmin (Export/Actions/Search и т.п.) — названия наших полей и
+    # значения enum'ов (ISSUE/SUBSCRIPTION/...) он не трогает, это делаем
+    # руками через column_labels/column_formatters/form_args ниже — как в
+    # Ozon, редактор нигде не должен видеть английские системные имена.
+    column_labels = {
+        Product.id: "ID",
+        Product.title: "Название",
+        Product.type: "Тип",
+        Product.description: "Описание",
+        Product.image_upload: "Фото (загрузить)",
+        Product.cover_url: "Ссылка на обложку",
+        Product.characteristics: "Характеристики",
+        Product.price: "Цена",
+        Product.stock: "Остаток",
+        Product.is_active: "Активен",
+        Product.created_at: "Создан",
+        Product.updated_at: "Изменён",
+    }
+    column_formatters = {Product.type: _format_product_type}
+    column_formatters_detail = {Product.type: _format_product_type}
     # image_upload — файловое поле (виджет-загрузчик подставляется автоматом
     # моделеконвертером sqladmin по типу колонки ImageType, см. models.py).
     # cover_url остаётся рядом как текстовое поле — можно вставить внешнюю
@@ -54,13 +89,31 @@ class ProductAdmin(ModelView, model=Product):
         Product.description,
         Product.image_upload,
         Product.cover_url,
+        Product.characteristics,
         Product.price,
         Product.stock,
         Product.is_active,
     ]
+    # image_upload/cover_url — главное фото карточки (как обложка на Ozon),
+    # дополнительные фото галереи — отдельный раздел "Фото товара"
+    # (ProductPhotoAdmin ниже), сначала нужно сохранить товар, чтобы у него
+    # появился id, на который они ссылаются.
+    # "type" тоже переопределён на голый SelectField: у enum-колонок sqladmin
+    # безусловно перезаписывает kwargs["choices"] в conv_enum (см.
+    # sqladmin/forms.py) — form_args={"choices": [...]} для Enum-полей молча
+    # игнорируется тем же способом, что сработал для JSONEditorField ниже, но
+    # с готовым field-классом заново. coerce=str — значения choices уже те же
+    # строки-имена enum'а (ISSUE/SUBSCRIPTION/MERCH), что sqladmin ожидает при
+    # записи обратно в модель, просто с человеческой подписью рядом.
+    form_overrides = {"characteristics": JSONEditorField, "type": wtforms.SelectField}
     form_args = {
-        "image_upload": {"description": "Загрузите файл — публичная ссылка сама подставится в поле «Cover Url» ниже."},
+        "image_upload": {"description": "Загрузите файл — публичная ссылка сама подставится в поле «Ссылка на обложку» ниже. Это главное фото карточки — доп. фото добавляются в разделе «Фото товара» после сохранения."},
         "cover_url": {"description": "Заполняется автоматически при загрузке файла выше; можно вписать и внешнюю ссылку на картинку вручную."},
+        "characteristics": {
+            "mode": "form",
+            "description": "Характеристики карточки — как на Ozon: название и значение, например «Автор» / «Год» / «Страниц». Пустой список ({}) — характеристик нет.",
+        },
+        "type": {"choices": [(t.name, PRODUCT_TYPE_LABELS_RU[t]) for t in ProductType], "coerce": str},
     }
 
     async def on_model_change(self, data: dict, model: Product, is_created: bool, request) -> None:
@@ -106,6 +159,30 @@ class ProductAdmin(ModelView, model=Product):
             db.close()
 
 
+class ProductPhotoAdmin(ModelView, model=ProductPhoto):
+    """Галерея доп. фото товара (как на Ozon — несколько снимков карточки).
+    Главное фото остаётся полем на самом товаре (Product.image_upload) —
+    sqladmin не умеет редактировать несколько файлов в одном поле формы,
+    поэтому доп. фото заводятся здесь отдельными записями со ссылкой на
+    товар; sort_order задаёт порядок показа."""
+
+    name = "Фото товара"
+    name_plural = "Фото товаров"
+    icon = "fa-solid fa-images"
+    column_list = [ProductPhoto.id, ProductPhoto.product, ProductPhoto.image_upload, ProductPhoto.sort_order]
+    column_default_sort = [(ProductPhoto.product_id, False), (ProductPhoto.sort_order, False)]
+    column_labels = {
+        ProductPhoto.id: "ID",
+        ProductPhoto.product: "Товар",
+        ProductPhoto.image_upload: "Фото",
+        ProductPhoto.sort_order: "Порядок",
+    }
+    form_columns = [ProductPhoto.product, ProductPhoto.image_upload, ProductPhoto.sort_order]
+    form_args = {
+        "sort_order": {"description": "Порядок в галерее — чем меньше число, тем раньше фото показывается после главного."},
+    }
+
+
 class DeliveryMethodAdmin(ModelView, model=DeliveryMethod):
     name = "Способ доставки"
     name_plural = "Способы доставки"
@@ -130,76 +207,63 @@ class DeliveryMethodAdmin(ModelView, model=DeliveryMethod):
     ]
 
 
-class OrderAdmin(ModelView, model=Order):
-    name = "Заказ"
-    name_plural = "Заказы"
-    icon = "fa-solid fa-receipt"
+DISCOUNT_TYPE_LABELS_RU = {
+    DiscountType.PERCENT: "Процент",
+    DiscountType.FIXED: "Фиксированная сумма",
+}
+
+
+def _format_discount_type(model: PromoCode, attribute) -> str:
+    return DISCOUNT_TYPE_LABELS_RU.get(model.discount_type, model.discount_type.value if model.discount_type else "—")
+
+
+class PromoCodeAdmin(ModelView, model=PromoCode):
+    """Промокоды на скидку — применяются в Mini App при оформлении заказа
+    (app/promotions.py, routers/orders.py:create_order). code хранится и
+    сравнивается регистронезависимо (см. routers/promo_codes.py) — редактор
+    может вводить как угодно."""
+
+    name = "Промокод"
+    name_plural = "Промокоды"
+    icon = "fa-solid fa-tags"
     column_list = [
-        Order.id,
-        Order.customer_name,
-        Order.status,
-        Order.payment_status,
-        Order.total,
-        Order.created_at,
+        PromoCode.code,
+        PromoCode.discount_type,
+        PromoCode.discount_value,
+        PromoCode.is_active,
+        PromoCode.valid_until,
     ]
-    column_default_sort = [(Order.id, True)]
-    can_create = False  # заказы создаются из магазина, а не вручную в админке
-    can_delete = False
-    form_columns = [Order.status, Order.tracking_number, Order.cancel_reason]
+    column_searchable_list = [PromoCode.code]
+    column_labels = {
+        PromoCode.code: "Код",
+        PromoCode.discount_type: "Тип скидки",
+        PromoCode.discount_value: "Размер скидки",
+        PromoCode.is_active: "Активен",
+        PromoCode.valid_until: "Действует до",
+    }
+    column_formatters = {PromoCode.discount_type: _format_discount_type}
+    column_formatters_detail = {PromoCode.discount_type: _format_discount_type}
+    form_columns = [
+        PromoCode.code,
+        PromoCode.discount_type,
+        PromoCode.discount_value,
+        PromoCode.is_active,
+        PromoCode.valid_until,
+    ]
+    # discount_type — тот же приём, что и Product.type выше: голый SelectField
+    # вместо enum-конвертера sqladmin, иначе form_args["choices"] молча
+    # перезаписывается обратно на PERCENT/FIXED.
+    form_overrides = {"discount_type": wtforms.SelectField}
+    form_args = {
+        "discount_value": {"description": "Смотря по типу скидки выше — процент (0-100) либо сумма в ₽."},
+        "valid_until": {"description": "Пусто — бессрочный."},
+        "discount_type": {"choices": [(t.name, DISCOUNT_TYPE_LABELS_RU[t]) for t in DiscountType], "coerce": str},
+    }
 
-    async def on_model_change(self, data: dict, model: Order, is_created: bool, request) -> None:
-        # Старый статус нужен ДО того, как sqladmin применит data к model —
-        # на этом шаге model ещё хранит значения до правки (см.
-        # sqladmin._queries._update_sync: on_model_change вызывается раньше
-        # _set_attributes_sync). Кладём в request.state, чтобы забрать в
-        # after_model_change, когда model уже обновлена и закоммичена.
-        request.state.order_old_status = model.status
-
-    async def after_model_change(self, data: dict, model: Order, is_created: bool, request) -> None:
-        old_status = getattr(request.state, "order_old_status", None)
-        if old_status is None or old_status == model.status:
-            return
-        changed_by = request.session.get("admin_username") or "admin"
-        db = SessionLocal()
-        try:
-            # Свежий инстанс в своей сессии — `model` пришёл из уже закрытой
-            # сессии sqladmin (expire_on_commit=False спасает скалярные
-            # колонки, но не ленивую загрузку order.items).
-            order = db.get(Order, model.id)
-            record_order_status_change(db, order, old_status, order.status, changed_by=changed_by)
-
-            # Остаток списывается только при оплате (см. routers/orders.py:
-            # pay_order) — если заказ отменяют из NEW, списания ещё не было,
-            # возвращать на склад нечего.
-            stock_was_deducted = old_status not in (OrderStatus.NEW, OrderStatus.CANCELLED)
-            if order.status == OrderStatus.CANCELLED and stock_was_deducted:
-                for item in order.items:
-                    product = db.get(Product, item.product_id)
-                    if product and product.stock is not None:
-                        product.stock += item.quantity
-                        db.add(
-                            StockMovement(
-                                product_id=product.id,
-                                delta=item.quantity,
-                                reason=StockMovementReason.ORDER_CANCELLED,
-                                order_id=order.id,
-                                changed_by=changed_by,
-                            )
-                        )
-
-            db.commit()
-        finally:
-            db.close()
-
-
-class OrderItemAdmin(ModelView, model=OrderItem):
-    name = "Позиция заказа"
-    name_plural = "Позиции заказов"
-    icon = "fa-solid fa-list"
-    column_list = [OrderItem.order_id, OrderItem.title, OrderItem.price, OrderItem.quantity]
-    can_create = False
-    can_edit = False
-    can_delete = False
+    async def on_model_change(self, data: dict, model: PromoCode, is_created: bool, request) -> None:
+        code = (data.get("code") or "").strip().upper()
+        if code:
+            data["code"] = code
 
 
 class CustomerAdmin(ModelView, model=Customer):
@@ -300,23 +364,6 @@ class AddressAdmin(ModelView, model=Address):
     column_list = [Address.id, Address.customer_id, Address.label, Address.is_default, Address.created_at]
     column_searchable_list = [Address.label]
     form_columns = [Address.customer, Address.label, Address.text, Address.is_default]
-
-
-class OrderStatusHistoryAdmin(ModelView, model=OrderStatusHistory):
-    name = "Смена статуса"
-    name_plural = "История статусов заказов"
-    icon = "fa-solid fa-clock-rotate-left"
-    column_list = [
-        OrderStatusHistory.order_id,
-        OrderStatusHistory.from_status,
-        OrderStatusHistory.to_status,
-        OrderStatusHistory.changed_by,
-        OrderStatusHistory.created_at,
-    ]
-    column_default_sort = [(OrderStatusHistory.id, True)]
-    can_create = False  # пишется только кодом — см. app/order_history.py
-    can_edit = False
-    can_delete = False
 
 
 class AdminUserAdmin(ModelView, model=AdminUser):
@@ -423,18 +470,34 @@ class RevenueReportView(BaseView):
 
 
 def register_admin(app, engine) -> Admin:
-    admin = Admin(app, engine, title="Чтиво · панель редакции", authentication_backend=AdminAuth())
-    admin.add_view(RevenueReportView)
+    # Идёт полный редизайн панели — разделы включаются обратно по одному,
+    # по мере переделки, а не все разом. Чтобы вернуть раздел — раскомментировать
+    # соответствующую строку ниже (сам класс *Admin выше не трогали).
+    admin = Admin(
+        app,
+        engine,
+        title="Чтиво · панель редакции",
+        authentication_backend=AdminAuth(),
+        # Разделы, ещё не переписанные под свою вёрстку (Товары, Фото
+        # товаров, Промокоды — ср. «Заказы» в app/admin_orders.py, у которых
+        # свой шаблон), рисует голый sqladmin: без i18n_config все его
+        # надписи (Export/Actions/Search/Showing X of Y/prev/next и т.п.)
+        # остаются на английском вперемешку с русскими названиями сущностей.
+        # Встроенный в sqladmin каталог переводов покрывает это готовым
+        # переводом chrome-строк — нужен только пакет babel (requirements.txt).
+        i18n_config=I18nConfig(default_locale="ru"),
+    )
+    # admin.add_view(RevenueReportView)
     admin.add_view(ProductAdmin)
-    admin.add_view(StockMovementAdmin)
-    admin.add_view(DeliveryMethodAdmin)
-    admin.add_view(OrderAdmin)
-    admin.add_view(OrderItemAdmin)
-    admin.add_view(OrderStatusHistoryAdmin)
-    admin.add_view(CustomerAdmin)
-    admin.add_view(AddressAdmin)
-    admin.add_view(SubscriptionAdmin)
-    admin.add_view(PaymentTransactionAdmin)
-    admin.add_view(BonusTransactionAdmin)
-    admin.add_view(AdminUserAdmin)
+    admin.add_view(ProductPhotoAdmin)
+    admin.add_view(OrdersPanelView)  # «Заказы» — свой BaseView, см. app/admin_orders.py
+    admin.add_view(PromoCodeAdmin)
+    # admin.add_view(StockMovementAdmin)
+    # admin.add_view(DeliveryMethodAdmin)
+    # admin.add_view(CustomerAdmin)
+    # admin.add_view(AddressAdmin)
+    # admin.add_view(SubscriptionAdmin)
+    # admin.add_view(PaymentTransactionAdmin)
+    # admin.add_view(BonusTransactionAdmin)
+    # admin.add_view(AdminUserAdmin)
     return admin

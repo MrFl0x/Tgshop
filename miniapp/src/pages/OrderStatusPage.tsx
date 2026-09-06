@@ -24,7 +24,7 @@ export function OrderStatusPage() {
 
   return (
     <div>
-      <PageHeader title={`Заказ №${order.id}`} />
+      <PageHeader title={`Заказ ${order.number}`} />
 
       <span className={`status-badge ${order.status}`}>{orderStatusLabel(order.status)}</span>
       {order.tracking_number && (
@@ -39,9 +39,15 @@ export function OrderStatusPage() {
           <span>
             {item.title} × {item.quantity}
           </span>
-          <span>{formatPrice(Number(item.price) * item.quantity)}</span>
+          <span>{formatPrice(item.subtotal)}</span>
         </div>
       ))}
+      {Number(order.discount_total) > 0 && (
+        <div className="summary-row" style={{ color: "var(--danger)" }}>
+          <span>Скидка{order.promo_code ? ` по промокоду «${order.promo_code}»` : ""}</span>
+          <span>-{formatPrice(order.discount_total)}</span>
+        </div>
+      )}
       <div className="summary-row">
         <span>Доставка</span>
         <span>{formatPrice(order.delivery_cost)}</span>
@@ -55,6 +61,12 @@ export function OrderStatusPage() {
         <>
           <h3 style={{ marginTop: 20 }}>Адрес доставки</h3>
           <p style={{ color: "var(--ink-muted)" }}>{order.delivery_address}</p>
+        </>
+      )}
+      {order.customer_comment && (
+        <>
+          <h3 style={{ marginTop: 20 }}>Комментарий к заказу</h3>
+          <p style={{ color: "var(--ink-muted)" }}>{order.customer_comment}</p>
         </>
       )}
 

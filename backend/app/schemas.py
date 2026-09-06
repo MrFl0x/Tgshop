@@ -4,7 +4,15 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from .models import DeliveryCostType, OrderStatus, PaymentStatus, ProductType, StockMovementReason
+from .models import (
+    DeliveryCostType,
+    DiscountType,
+    OrderStatus,
+    PaymentStatus,
+    ProductType,
+    ReturnStatus,
+    StockMovementReason,
+)
 
 
 class AddressIn(BaseModel):
@@ -90,6 +98,8 @@ class OrderCreateIn(BaseModel):
     delivery_method_id: int
     delivery_address: str = ""       # свободный ввод; игнорируется, если указан address_id
     address_id: Optional[int] = None  # адрес из сохранённых (см. /customers/{telegram_id}/addresses)
+    promo_code: Optional[str] = None  # см. app/models.py:PromoCode — применяется в create_order
+    customer_comment: str = ""
     items: List[OrderItemIn]
 
 
@@ -100,27 +110,45 @@ class OrderItemOut(BaseModel):
     title: str
     price: Decimal
     quantity: int
+    subtotal: Decimal
+
+
+class ReturnOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    reason: str
+    status: ReturnStatus
+    comment: str
+    created_at: datetime
 
 
 class OrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    number: str
     customer_id: Optional[int]
     customer_name: str
     customer_contact: str
     delivery_method_id: int
     delivery_address: str
     address_id: Optional[int]
+    pickup_point: str
     delivery_cost: Decimal
     items_total: Decimal
+    discount_total: Decimal
+    promo_code: Optional[str]
     total: Decimal
     status: OrderStatus
     payment_status: PaymentStatus
+    payment_method: str
     tracking_number: str
+    customer_comment: str
     cancel_reason: str
     created_at: datetime
     items: List[OrderItemOut]
+    returns: List[ReturnOut] = []
 
 
 class OrderStatusHistoryOut(BaseModel):
@@ -132,3 +160,11 @@ class OrderStatusHistoryOut(BaseModel):
     changed_by: str
     note: str
     created_at: datetime
+
+
+class PromoCodeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    discount_type: DiscountType
+    discount_value: Decimal

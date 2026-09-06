@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -36,18 +37,40 @@ class DeliveryCostType(str, enum.Enum):
 
 
 class OrderStatus(str, enum.Enum):
-    NEW = "new"
-    PAID = "paid"
-    ASSEMBLED = "assembled"
-    SHIPPED = "shipped"
+    """Как в личном кабинете продавца Ozon (docs/../tz-zakazy.md, п.4):
+    AWAITING_PAYMENT --оплата--> AWAITING_PACKAGING --собран--> AWAITING_DELIVER
+    --передан курьеру--> DELIVERING --вручён--> DELIVERED (--возврат--> RETURNED).
+    CANCELLED — из любого статуса до DELIVERING. Переименовано с
+    NEW/PAID/ASSEMBLED/SHIPPED в этом же заходе — см. миграцию
+    3f0a1c7e2b6d, где все старые заказы намеренно удалены, поэтому обратной
+    совместимости значений эта миграция не сохраняет."""
+
+    AWAITING_PAYMENT = "awaiting_payment"
+    AWAITING_PACKAGING = "awaiting_packaging"
+    AWAITING_DELIVER = "awaiting_deliver"
+    DELIVERING = "delivering"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
+    RETURNED = "returned"
 
 
 class PaymentStatus(str, enum.Enum):
     PENDING = "pending"
     PAID = "paid"
     FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class ReturnStatus(str, enum.Enum):
+    REQUESTED = "requested"  # оформлен редактором, ждёт решения
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    COMPLETED = "completed"  # деньги/товар фактически возвращены
+
+
+class DiscountType(str, enum.Enum):
+    PERCENT = "percent"  # % от суммы товаров
+    FIXED = "fixed"      # фиксированная сумма в ₽
 
 
 class SubscriptionStatus(str, enum.Enum):
@@ -75,6 +98,7 @@ class StockMovementReason(str, enum.Enum):
     ORDER_CANCELLED = "order_cancelled"  # возврат на склад при отмене уже оплаченного заказа
     RESTOCK = "restock"                  # приход — редактор увеличил остаток в форме товара
     CORRECTION = "correction"            # инвентаризация/коррекция — редактор уменьшил остаток
+    RETURNED = "returned"                # возврат на склад при оформлении Return (см. admin_orders.py)
 
 
 class Address(Base):
@@ -135,14 +159,47 @@ class Product(Base):
     # ProductCard.tsx). cover_url остаётся текстовым полем — можно по-прежнему
     # просто вставить внешнюю ссылку на картинку, не загружая файл.
     image_upload = Column(ImageType(storage=product_images_storage, upload_to="products"), nullable=True)
+    # Характеристики карточки товара (как в Ozon — таблица "название: значение",
+    # например {"Автор": "...", "Год": "2025", "Страниц": "120"}) — набор полей
+    # у номера, подписки и мерча разный, поэтому не завели по колонке на каждое
+    # поле, а храним свободным JSON-словарём. Редактируется в /admin через
+    # JSONEditorField (см. ProductAdmin в app/admin.py), это НЕ то же самое, что
+    # position галереи (ProductPhoto ниже).
+    characteristics = Column(JSON, nullable=False, default=dict)
     price = Column(Numeric(10, 2), nullable=False, default=0)
     stock = Column(Integer, nullable=True)  # null = без ограничения (например, подписка)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    photos = relationship(
+        "ProductPhoto", back_populates="product", cascade="all, delete-orphan", order_by="ProductPhoto.sort_order"
+    )
+
     def __str__(self) -> str:
         return self.title
+
+
+class ProductPhoto(Base):
+    """Доп. фото карточки товара — галерея сверх основной обложки
+    (Product.cover_url/image_upload остаётся первым/главным фото, как в
+    Ozon). Отдельная таблица, а не список файлов на Product, потому что
+    sqladmin не даёт виджет для загрузки нескольких файлов в одном поле —
+    зато даёт обычный ModelView со своим списком/формой (см. ProductPhotoAdmin
+    в app/admin.py), где сортировка задаётся полем sort_order."""
+
+    __tablename__ = "product_photos"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    image_upload = Column(ImageType(storage=product_images_storage, upload_to="products"), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    product = relationship("Product", back_populates="photos")
+
+    def __str__(self) -> str:
+        return f"Фото #{self.id} — {self.product.title if self.product else self.product_id}"
 
 
 class StockMovement(Base):
@@ -284,18 +341,37 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
+    # "ЧТ-{год}-{id с ведущими нулями до 6 знаков}" — задаётся один раз при
+    # создании (см. routers/orders.py:create_order) сразу после db.flush(),
+    # когда id уже назначен базой. Не отдельный счётчик-с-нуля-на-Новый-год —
+    # просто человекочитаемая обёртка над id, чтобы не заводить отдельную
+    # последовательность ради красивого номера.
+    number = Column(String(32), unique=True, nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     customer_name = Column(String(255), nullable=False, default="")
     customer_contact = Column(String(255), nullable=False, default="")  # телефон или @username в Telegram
     delivery_method_id = Column(Integer, ForeignKey("delivery_methods.id"), nullable=False)
     delivery_address = Column(Text, nullable=False, default="")
     address_id = Column(Integer, ForeignKey("addresses.id"), nullable=True)
+    # Пункт выдачи (Boxberry/СДЭК ПВЗ и т.п.) — отдельно от delivery_address:
+    # у самовывоза из ПВЗ службы это не совпадает с адресом клиента. Выбора
+    # ПВЗ на карте в Mini App нет — поле заполняется вручную редактором в
+    # карточке заказа.
+    pickup_point = Column(Text, nullable=False, default="")
     delivery_cost = Column(Numeric(10, 2), default=0)
     items_total = Column(Numeric(10, 2), default=0)
+    discount_total = Column(Numeric(10, 2), nullable=False, default=0)
+    promo_code = Column(String(32), nullable=True)
     total = Column(Numeric(10, 2), default=0)
-    status = Column(SAEnum(OrderStatus), default=OrderStatus.NEW, nullable=False)
+    status = Column(SAEnum(OrderStatus), default=OrderStatus.AWAITING_PAYMENT, nullable=False)
     payment_status = Column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    # Пока единственный реальный способ — заглушка (см. app/payments.py), но
+    # поле уже отдельное от PaymentTransaction.provider, чтобы карточка заказа
+    # могла показать способ (card/sbp/cash) независимо от имени провайдера.
+    payment_method = Column(String(20), nullable=False, default="card")
     tracking_number = Column(String(120), nullable=False, default="")
+    customer_comment = Column(Text, nullable=False, default="")  # комментарий покупателя при оформлении
+    admin_comment = Column(Text, nullable=False, default="")     # служебная заметка редакции, клиенту не видна
     cancel_reason = Column(Text, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -304,9 +380,10 @@ class Order(Base):
     delivery_method = relationship("DeliveryMethod")
     address = relationship("Address")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    returns = relationship("Return", back_populates="order", cascade="all, delete-orphan")
 
     def __str__(self) -> str:
-        return f"Заказ №{self.id}"
+        return self.number or f"Заказ №{self.id}"
 
 
 class OrderStatusHistory(Base):
@@ -341,6 +418,51 @@ class OrderItem(Base):
     title = Column(String(255), nullable=False)     # снимок названия на момент заказа
     price = Column(Numeric(10, 2), nullable=False)  # снимок цены на момент заказа
     quantity = Column(Integer, nullable=False, default=1)
+    subtotal = Column(Numeric(10, 2), nullable=False, default=0)  # price * quantity на момент заказа
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
+
+
+class Return(Base):
+    """Возврат целого заказа (без частичных возвратов отдельных позиций —
+    см. tz-zakazy.md, п.8). Заводится действием «Оформить возврат» в карточке
+    заказа (app/admin.py): переводит Order.status в RETURNED и пишет сюда
+    причину — отдельно от Order.cancel_reason, который используется для
+    отмены ДО отгрузки, а не для возврата уже доставленного."""
+
+    __tablename__ = "returns"
+
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    reason = Column(Text, nullable=False, default="")
+    status = Column(SAEnum(ReturnStatus), nullable=False, default=ReturnStatus.REQUESTED)
+    comment = Column(Text, nullable=False, default="")  # решение/комментарий редакции
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    order = relationship("Order", back_populates="returns")
+
+    def __str__(self) -> str:
+        return f"Возврат по заказу №{self.order_id}"
+
+
+class PromoCode(Base):
+    """Промокод на скидку — применяется при оформлении заказа
+    (routers/orders.py:create_order передаёт Order.promo_code, скидка кладётся
+    в Order.discount_total). Без лимита использований и привязки к
+    конкретному клиенту — для нынешнего масштаба редакция сама следит, кому
+    какой код давала."""
+
+    __tablename__ = "promo_codes"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(32), unique=True, nullable=False, index=True)
+    discount_type = Column(SAEnum(DiscountType), nullable=False, default=DiscountType.PERCENT)
+    discount_value = Column(Numeric(10, 2), nullable=False, default=0)  # % (0-100) либо ₽, смотря по discount_type
+    is_active = Column(Boolean, default=True, nullable=False)
+    valid_until = Column(DateTime, nullable=True)  # null — бессрочный
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __str__(self) -> str:
+        return self.code

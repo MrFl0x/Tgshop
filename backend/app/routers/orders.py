@@ -1,7 +1,9 @@
+from datetime import datetime
+from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..customers import award_referral_bonus_if_eligible, get_or_create_customer
@@ -18,12 +20,14 @@ from ..models import (
     PaymentStatus,
     PaymentTransaction,
     Product,
+    PromoCode,
     StockMovement,
     StockMovementReason,
     TransactionStatus,
 )
 from ..order_history import record_order_status_change
 from ..payments import get_payment_provider
+from ..promotions import is_promo_valid, promo_discount
 from ..schemas import OrderCreateIn, OrderOut, OrderStatusHistoryOut
 from ..telegram_auth import get_verified_telegram_id
 
@@ -78,18 +82,35 @@ def create_order(
         if not address or address.customer_id != customer.id:
             raise HTTPException(status_code=400, detail="Адрес не найден")
 
+    # Промокод проверяем и считаем скидку ДО создания заказа — если код
+    # невалиден, заказ вообще не должен появиться (см. app/promotions.py).
+    promo: PromoCode | None = None
+    if payload.promo_code:
+        promo = db.query(PromoCode).filter(func.upper(PromoCode.code) == payload.promo_code.strip().upper()).first()
+        if not is_promo_valid(promo):
+            raise HTTPException(status_code=400, detail="Промокод не найден или недействителен")
+
+    # Номер заказа — из отдельной БД-последовательности (см. миграцию
+    # 3f0a1c7e2b6d), не из order.id: number — NOT NULL, а id появляется только
+    # после INSERT, значит на момент конструирования Order его ещё нет.
+    # nextval атомарен — безопасно и при параллельных запросах.
+    order_seq = db.execute(func.nextval("order_number_seq")).scalar()
+    order_number = f"ЧТ-{datetime.utcnow().year}-{order_seq:06d}"
+
     order = Order(
+        number=order_number,
         customer_id=customer.id,
         customer_name=payload.customer_name,
         customer_contact=payload.customer_contact,
         delivery_method_id=delivery.id,
         delivery_address=payload.delivery_address.strip() or (address.text if address else ""),
         address_id=address.id if address else None,
-        status=OrderStatus.NEW,
+        customer_comment=payload.customer_comment.strip(),
+        status=OrderStatus.AWAITING_PAYMENT,
         payment_status=PaymentStatus.PENDING,
     )
 
-    items_total = 0.0
+    items_total = Decimal("0")
     for line in payload.items:
         product = db.get(Product, line.product_id)
         if not product or not product.is_active:
@@ -105,23 +126,28 @@ def create_order(
         if product.stock is not None and product.stock < line.quantity:
             raise HTTPException(status_code=400, detail=f"«{product.title}» — недостаточно остатка")
 
+        subtotal = product.price * line.quantity
         order.items.append(
             OrderItem(
                 product_id=product.id,
                 title=product.title,
                 price=product.price,
                 quantity=line.quantity,
+                subtotal=subtotal,
             )
         )
-        items_total += float(product.price) * line.quantity
+        items_total += subtotal
 
     # Для CALCULATED пока используем fixed_cost как заглушку — сюда встанет
     # реальный расчёт через API СДЭК/Boxberry/Почты России (см. app/delivery_providers.py, TODO).
-    delivery_cost = 0.0 if delivery.cost_type == DeliveryCostType.FREE else float(delivery.fixed_cost or 0)
+    delivery_cost = Decimal("0") if delivery.cost_type == DeliveryCostType.FREE else Decimal(delivery.fixed_cost or 0)
+    discount_total = promo_discount(promo, items_total) if promo else Decimal("0")
 
     order.items_total = items_total
     order.delivery_cost = delivery_cost
-    order.total = items_total + delivery_cost
+    order.discount_total = discount_total
+    order.promo_code = promo.code if promo else None
+    order.total = items_total + delivery_cost - discount_total
 
     db.add(order)
     db.commit()
@@ -164,7 +190,7 @@ def pay_order(
 
     if result.success:
         order.payment_status = PaymentStatus.PAID
-        order.status = OrderStatus.PAID
+        order.status = OrderStatus.AWAITING_PACKAGING
         for item in order.items:
             product = db.get(Product, item.product_id)
             if product and product.stock is not None:

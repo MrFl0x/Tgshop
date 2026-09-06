@@ -1,0 +1,194 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+{# .col-12 внутри <div class="row row-deck row-cards"> (sqladmin/layout.html)
+   у Tabler сам становится display:flex с direction:row — без явного column
+   блоки ниже легли бы в один ряд вместо друг под другом (см. list.html). #}
+<div class="col-12" style="display:flex; flex-direction:column; gap:1rem;">
+
+  <div class="d-flex align-items-center">
+    <div>
+      <h2 class="mb-0">Заказ {{ order.number }}</h2>
+      <div class="text-secondary">{{ order.created_at.strftime("%d.%m.%Y, %H:%M") if order.created_at else "" }}</div>
+    </div>
+    <span class="badge {{ status_badge_class.get(order.status, 'bg-secondary') }} ms-3" style="font-size:0.9rem">
+      {{ status_labels.get(order.status, order.status.value) }}
+    </span>
+    <div class="ms-auto d-flex" style="gap:8px">
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin:view-orders_label_pdf', order_id=order.id) }}" target="_blank">Печать этикетки</a>
+      {% if can_advance %}
+      <form method="post" action="{{ url_for('admin:view-orders_advance', order_id=order.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-primary">{{ next_status_label }} →</button>
+      </form>
+      {% elif next_status_label %}
+      <button class="btn btn-primary" disabled title="{{ advance_block_reason }}">{{ next_status_label }} →</button>
+      {% endif %}
+    </div>
+  </div>
+  {% if advance_block_reason and can_advance == false and next_status_label %}
+  <div class="alert alert-warning">{{ advance_block_reason }}</div>
+  {% endif %}
+
+  {# Обычный .row.row-cards здесь ломается (тот же Tabler-эффект, что и в
+     list.html — вложенный row-cards внутри такого же считает ширину/раскладку
+     колонок неверно), поэтому — независимый flex с явными стилями. #}
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-start;">
+    <div style="flex:2 1 480px; display:flex; flex-direction:column;">
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Состав заказа</h3></div>
+        <div class="table-responsive">
+          <table class="table table-vcenter mb-0">
+            <thead>
+              <tr><th>Товар</th><th>Артикул</th><th>Цена</th><th>Кол-во</th><th>Сумма</th></tr>
+            </thead>
+            <tbody>
+              {% for item in order.items %}
+              <tr>
+                <td>{{ item.title }}</td>
+                <td>#{{ item.product_id }}</td>
+                <td>{{ "%.0f"|format(item.price) }} ₽</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ "%.0f"|format(item.subtotal) }} ₽</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body">
+          <div class="d-flex justify-content-between"><span>Товары</span><span>{{ "%.2f"|format(order.items_total) }} ₽</span></div>
+          {% if order.discount_total and order.discount_total > 0 %}
+          <div class="d-flex justify-content-between text-danger">
+            <span>Скидка{{ " по промокоду " + order.promo_code if order.promo_code else "" }}</span>
+            <span>-{{ "%.2f"|format(order.discount_total) }} ₽</span>
+          </div>
+          {% endif %}
+          <div class="d-flex justify-content-between"><span>Доставка</span><span>{{ "%.2f"|format(order.delivery_cost) }} ₽</span></div>
+          <hr class="my-2">
+          <div class="d-flex justify-content-between fw-bold"><span>Итого</span><span>{{ "%.2f"|format(order.total) }} ₽</span></div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Доставка</h3></div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Способ:</strong> {{ order.delivery_method.name if order.delivery_method else "—" }}</p>
+          {% if order.delivery_address %}<p class="mb-1"><strong>Адрес:</strong> {{ order.delivery_address }}</p>{% endif %}
+          {% if order.customer_comment %}<p class="mb-1"><strong>Комментарий покупателя:</strong> {{ order.customer_comment }}</p>{% endif %}
+          <form method="post" action="{{ url_for('admin:view-orders_fields', order_id=order.id) }}" class="row g-2 mt-2">
+            <div class="col-md-4">
+              <label class="form-label">Трек-номер</label>
+              <input type="text" name="tracking_number" value="{{ order.tracking_number }}" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Пункт выдачи (ПВЗ)</label>
+              <input type="text" name="pickup_point" value="{{ order.pickup_point }}" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Заметка редакции</label>
+              <input type="text" name="admin_comment" value="{{ order.admin_comment }}" class="form-control">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-sm btn-secondary">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">История статусов</h3></div>
+        <ul class="list-group list-group-flush">
+          {% for h in history %}
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between">
+              <span>
+                {% if h.from_status %}{{ status_labels.get(h.from_status, h.from_status.value) }} → {% endif %}
+                {{ status_labels.get(h.to_status, h.to_status.value) }}
+              </span>
+              <span class="text-secondary">{{ h.created_at.strftime("%d.%m.%Y %H:%M") if h.created_at else "" }} · {{ h.changed_by }}</span>
+            </div>
+            {% if h.note %}<div class="text-secondary">{{ h.note }}</div>{% endif %}
+          </li>
+          {% else %}
+          <li class="list-group-item text-secondary">Пока нет изменений статуса.</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+    </div>
+
+    <div style="flex:1 1 320px; display:flex; flex-direction:column;">
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Покупатель</h3></div>
+        <div class="card-body">
+          <p class="mb-1">{{ order.customer_name or "—" }}</p>
+          <p class="mb-1 text-secondary">{{ order.customer_contact or "—" }}</p>
+          <p class="mb-0 text-secondary">Прошлых заказов: {{ past_orders_count }}</p>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Оплата</h3></div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Способ:</strong> {{ order.payment_method }}</p>
+          <p class="mb-1"><strong>Статус:</strong> {{ payment_status_labels.get(order.payment_status, order.payment_status.value) }}</p>
+          {% for p in payments %}
+          <div class="border-top pt-2 mt-2 text-secondary">
+            <div>{{ p.created_at.strftime("%d.%m.%Y %H:%M") if p.created_at else "" }} · {{ p.provider }}</div>
+            <div>{{ "%.2f"|format(p.amount) }} ₽ — {{ p.status.value }}</div>
+            {% if p.provider_payment_id %}<div>ID: {{ p.provider_payment_id }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if can_cancel %}
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Отмена заказа</h3></div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('admin:view-orders_cancel', order_id=order.id) }}">
+            <div class="mb-2">
+              <textarea name="reason" class="form-control" placeholder="Причина отмены" required></textarea>
+            </div>
+            <label class="form-check mb-2">
+              <input type="checkbox" name="restock" class="form-check-input">
+              <span class="form-check-label">Вернуть товары на склад</span>
+            </label>
+            <button type="submit" class="btn btn-danger w-100">Отменить заказ</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if can_return %}
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Оформление возврата</h3></div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('admin:view-orders_return', order_id=order.id) }}">
+            <div class="mb-2">
+              <textarea name="reason" class="form-control" placeholder="Причина возврата" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-danger w-100">Оформить возврат</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if order.returns %}
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Возвраты по заказу</h3></div>
+        <ul class="list-group list-group-flush">
+          {% for r in order.returns %}
+          <li class="list-group-item">
+            <div>{{ r.created_at.strftime("%d.%m.%Y %H:%M") if r.created_at else "" }} — {{ return_status_labels.get(r.status, r.status.value) }}</div>
+            <div class="text-secondary">{{ r.reason }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

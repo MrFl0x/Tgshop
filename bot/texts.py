@@ -6,17 +6,19 @@ GREETING = (
     "Открывайте магазин кнопкой ниже 👇"
 )
 
-# Значения ключей — строки OrderStatus (app/models.py в backend); бот не
-# импортирует backend-модели напрямую (независимые процессы, см.
+# Значения ключей — строки OrderStatus.value (app/models.py в backend); бот
+# не импортирует backend-модели напрямую (независимые процессы, см.
 # docs/TZ-02-bot-i-miniapp.md, ТЗ-1), поэтому список статусов продублирован
-# здесь как обычные строки.
+# здесь как обычные строки. Статусы Ozon-style — см. tz-zakazy.md и миграцию
+# backend 3f0a1c7e2b6d (старые new/paid/assembled/shipped сюда не входят).
 STATUS_LABELS = {
-    "new": "🆕 новый",
-    "paid": "✅ оплачен",
-    "assembled": "📦 собран",
-    "shipped": "🚚 в пути",
+    "awaiting_payment": "🆕 ожидает оплаты",
+    "awaiting_packaging": "✅ оплачен, собираем",
+    "awaiting_deliver": "📦 собран, ждёт отгрузки",
+    "delivering": "🚚 в пути",
     "delivered": "📬 доставлен",
     "cancelled": "❌ отменён",
+    "returned": "↩️ оформлен возврат",
 }
 
 

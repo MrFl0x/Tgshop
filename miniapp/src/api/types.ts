@@ -3,8 +3,18 @@
 
 export type ProductType = "issue" | "subscription" | "merch";
 export type DeliveryCostType = "free" | "fixed" | "calculated";
-export type OrderStatus = "new" | "paid" | "assembled" | "shipped" | "delivered" | "cancelled";
-export type PaymentStatus = "pending" | "paid" | "failed";
+// Ozon-style статусы (см. tz-zakazy.md, backend-миграция 3f0a1c7e2b6d) —
+// awaiting_payment → awaiting_packaging → awaiting_deliver → delivering →
+// delivered, плюс cancelled/returned как боковые ветки.
+export type OrderStatus =
+  | "awaiting_payment"
+  | "awaiting_packaging"
+  | "awaiting_deliver"
+  | "delivering"
+  | "delivered"
+  | "cancelled"
+  | "returned";
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
 export interface Product {
   id: number;
@@ -47,6 +57,8 @@ export interface OrderCreateIn {
   delivery_method_id: number;
   delivery_address: string;
   address_id?: number | null;
+  promo_code?: string | null;
+  customer_comment?: string;
   items: OrderItemIn[];
 }
 
@@ -55,25 +67,47 @@ export interface OrderItemOut {
   title: string;
   price: string;
   quantity: number;
+  subtotal: string;
+}
+
+export interface ReturnOut {
+  id: number;
+  reason: string;
+  status: "requested" | "approved" | "rejected" | "completed";
+  comment: string;
+  created_at: string;
 }
 
 export interface Order {
   id: number;
+  number: string;
   customer_id: number | null;
   customer_name: string;
   customer_contact: string;
   delivery_method_id: number;
   delivery_address: string;
   address_id: number | null;
+  pickup_point: string;
   delivery_cost: string;
   items_total: string;
+  discount_total: string;
+  promo_code: string | null;
   total: string;
   status: OrderStatus;
   payment_status: PaymentStatus;
+  payment_method: string;
   tracking_number: string;
+  customer_comment: string;
   cancel_reason: string;
   created_at: string;
   items: OrderItemOut[];
+  returns: ReturnOut[];
+}
+
+export interface PromoCodeOut {
+  code: string;
+  discount_type: "percent" | "fixed";
+  discount_value: string;
 }
 
 export interface OrderStatusHistoryEntry {

@@ -7,6 +7,7 @@ import type {
   OrderCreateIn,
   OrderStatusHistoryEntry,
   Product,
+  PromoCodeOut,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -60,6 +61,12 @@ export const api = {
   },
   deliveryMethods: {
     list: () => request<DeliveryMethod[]>("/delivery-methods/", { auth: false }),
+  },
+  promoCodes: {
+    // Публичный, без initData (см. backend/app/routers/promo_codes.py) — только
+    // предпросмотр скидки на экране оформления, окончательно применяется и
+    // проверяется ещё раз сервером в orders.create.
+    get: (code: string) => request<PromoCodeOut>(`/promo-codes/${encodeURIComponent(code)}`, { auth: false }),
   },
   addresses: {
     list: (telegramId: string) => request<Address[]>(`/customers/${telegramId}/addresses/`),

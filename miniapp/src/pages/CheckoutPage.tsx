@@ -30,6 +30,12 @@ export function CheckoutPage() {
   const [newAddressText, setNewAddressText] = useState("");
   const [saveNewAddress, setSaveNewAddress] = useState(false);
 
+  const [customerComment, setCustomerComment] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountType: "percent" | "fixed"; discountValue: number } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -61,7 +67,29 @@ export function CheckoutPage() {
   const selectedMethod = useMemo(() => methods?.find((m) => m.id === deliveryMethodId) ?? null, [methods, deliveryMethodId]);
   const needsAddress = selectedMethod?.requires_address ?? false;
   const deliveryCost = selectedMethod ? Number(selectedMethod.fixed_cost ?? 0) : 0;
-  const grandTotal = totalPrice + (selectedMethod?.cost_type === "free" ? 0 : deliveryCost);
+  const discountAmount = useMemo(() => {
+    if (!appliedPromo) return 0;
+    const raw =
+      appliedPromo.discountType === "percent" ? (totalPrice * appliedPromo.discountValue) / 100 : appliedPromo.discountValue;
+    return Math.min(raw, totalPrice);
+  }, [appliedPromo, totalPrice]);
+  const grandTotal = totalPrice + (selectedMethod?.cost_type === "free" ? 0 : deliveryCost) - discountAmount;
+
+  async function handleApplyPromo() {
+    const code = promoInput.trim();
+    if (!code) return;
+    setPromoChecking(true);
+    setPromoError(null);
+    try {
+      const promo = await api.promoCodes.get(code);
+      setAppliedPromo({ code: promo.code, discountType: promo.discount_type, discountValue: Number(promo.discount_value) });
+    } catch (err) {
+      setAppliedPromo(null);
+      setPromoError(err instanceof ApiError ? "Промокод не найден или недействителен" : "Не удалось проверить промокод");
+    } finally {
+      setPromoChecking(false);
+    }
+  }
 
   if (lines.length === 0) {
     navigate("/cart", { replace: true });
@@ -91,6 +119,8 @@ export function CheckoutPage() {
         delivery_method_id: deliveryMethodId,
         delivery_address: needsAddress && !usingSavedAddress ? newAddressText.trim() : "",
         address_id: usingSavedAddress ? Number(addressChoice) : null,
+        promo_code: appliedPromo?.code ?? null,
+        customer_comment: customerComment.trim(),
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity })),
       });
 
@@ -202,11 +232,56 @@ export function CheckoutPage() {
             </>
           )}
 
+          <h3 style={{ marginTop: 20 }}>Комментарий к заказу</h3>
+          <div className="field">
+            <textarea
+              value={customerComment}
+              onChange={(e) => setCustomerComment(e.target.value)}
+              placeholder="Необязательно — например, пожелания по доставке"
+            />
+          </div>
+
+          <h3 style={{ marginTop: 20 }}>Промокод</h3>
+          {appliedPromo ? (
+            <div className="summary-row">
+              <span>Применён «{appliedPromo.code}»</span>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setAppliedPromo(null);
+                  setPromoInput("");
+                }}
+              >
+                Убрать
+              </button>
+            </div>
+          ) : (
+            <div className="field" style={{ display: "flex", gap: 8, flexDirection: "row" }}>
+              <input
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value)}
+                placeholder="Если есть промокод"
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn" disabled={promoChecking || !promoInput.trim()} onClick={handleApplyPromo}>
+                {promoChecking ? "…" : "Применить"}
+              </button>
+            </div>
+          )}
+          {promoError && <ErrorBanner message={promoError} />}
+
           <div style={{ marginTop: 20 }}>
             <div className="summary-row">
               <span>Товары</span>
               <span>{formatPrice(totalPrice)}</span>
             </div>
+            {discountAmount > 0 && (
+              <div className="summary-row" style={{ color: "var(--danger)" }}>
+                <span>Скидка по промокоду</span>
+                <span>-{formatPrice(discountAmount)}</span>
+              </div>
+            )}
             <div className="summary-row">
               <span>Доставка</span>
               <span>{selectedMethod?.cost_type === "free" ? "бесплатно" : formatPrice(deliveryCost)}</span>
